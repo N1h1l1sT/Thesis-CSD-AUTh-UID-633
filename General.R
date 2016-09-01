@@ -22,12 +22,6 @@ dbhandle <- odbcDriverConnect(sqlConnString)
 #### SQL Table: Mel_Ylika ###
 #############################
 
-# Mel_Ylika_DS <- rxImport(inData = sqlFetch(dbhandle, 'vMel_Ylika', colnames=FALSE, rows_at_time=1000),
-#                          outFile = paste(strXDF, "Mel_Ylika_DS.xdf", sep = ""),
-#                          stringsAsFactors = TRUE,
-#                          overwrite = TRUE)
-Mel_Ylika_DS <- rxImport(inData = paste(strXDF, "Mel_Ylika_DS.xdf", sep = ""))
-
 #PromitheftisAbbr <- c("DEH", "NonDEH")
   ccColInfo <- list(
     Promitheftis = list(type = "factor",
@@ -38,13 +32,19 @@ Mel_Ylika_DS <- rxImport(inData = paste(strXDF, "Mel_Ylika_DS.xdf", sep = ""))
                         newLevels = c("False", "True"))
   )
 
-sql_Mel_Ylika_DS <- RxSqlServerData(connectionString = sqlConnString,
-                                    table = "[Mel_Ylika]", colInfo = ccColInfo,
-                                    rowsPerRead = sqlRowsPerRead)
-rxGetVarInfo(sql_Mel_Ylika_DS)
-CurSummarySQL <- rxSummary(~., data = sql_Mel_Ylika_DS)
-CurSummarySQL$sDataFrame
+#sql_Mel_Ylika_DS <- RxSqlServerData(connectionString = sqlConnString,
+                                    #table = "[Mel_Ylika]", colInfo = ccColInfo,
+                                    #rowsPerRead = sqlRowsPerRead)
+#rxGetVarInfo(sql_Mel_Ylika_DS)
+#CurSummarySQL <- rxSummary(~., data = sql_Mel_Ylika_DS)
+#CurSummarySQL$sDataFrame
 
+
+# Mel_Ylika_DS <- rxImport(inData = sqlFetch(dbhandle, 'vMel_Ylika', colnames=FALSE, rows_at_time=1000),
+#                          outFile = paste(strXDF, "Mel_Ylika_DS.xdf", sep = ""),
+#                          stringsAsFactors = TRUE,
+#                          overwrite = TRUE)
+Mel_Ylika_DS <- rxImport(inData = paste(strXDF, "Mel_Ylika_DS.xdf", sep = ""))
 
 rxGetVarInfo(Mel_Ylika_DS)
 CurSummary <- rxSummary(~., data = Mel_Ylika_DS)
@@ -86,10 +86,10 @@ CurSummary$sDataFrame
 #### SQL Table: vErga ###
 #########################
 
-Erga_DS <- rxImport(inData = sqlFetch(dbhandle, 'vErga', colnames=FALSE, rows_at_time=1000),
-                        outFile = paste(strXDF, "Erga_DS.xdf", sep = ""),
-                        stringsAsFactors = TRUE,
-                        overwrite = TRUE)
+#Erga_DS <- rxImport(inData = sqlFetch(dbhandle, 'vErga', colnames=FALSE, rows_at_time=1000),
+                        #outFile = paste(strXDF, "Erga_DS.xdf", sep = ""),
+                        #stringsAsFactors = TRUE,
+                        #overwrite = TRUE)
 Erga_DS <- rxImport(inData = paste(strXDF, "Erga_DS.xdf", sep = ""))
 
 rxGetVarInfo(Erga_DS)
@@ -97,35 +97,13 @@ CurSummary <- rxSummary(~., data = Erga_DS)
 CurSummary$sDataFrame
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #######################
 #### SQL Table: AIO ###
 #######################
-AIO_DS <- rxImport(inData = sqlFetch(dbhandle, 'vAIO', colnames=FALSE, rows_at_time=1000),
-                        outFile = paste(strXDF, "AIO_DS.xdf", sep = ""),
-                        stringsAsFactors = TRUE,
-                        overwrite = TRUE)
+#AIO_DS <- rxImport(inData = sqlFetch(dbhandle, 'vAIO', colnames=FALSE, rows_at_time=1000),
+                        #outFile = paste(strXDF, "AIO_DS.xdf", sep = ""),
+                        #stringsAsFactors = TRUE,
+                        #overwrite = TRUE)
 AIO_DS <- rxImport(inData = paste(strXDF, "AIO_DS.xdf", sep = ""))
 
 rxGetVarInfo(AIO_DS)
