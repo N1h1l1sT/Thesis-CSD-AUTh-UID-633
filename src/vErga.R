@@ -1,22 +1,3 @@
-###################
-## Original Data ##
-###################
-
-#P.S. A View is needed with greek letters, because 'ΕΡΓΑ' won't work with error: Error in odbcTableExists(channel, sqtable): ‘<U+0395><U+03A1>G<U+0391>’: table not found on channel
-Erga_DS <- rxImport(inData = RxOdbcData(sqlQuery = "SELECT * FROM ERGA", connectionString = sqlConnString, rowsPerRead = 5000),
-                    outFile = paste(strXDF, "Erga_DS.xdf", sep = ""),
-                    colClasses = vErgaColClasses,
-                    colInfo = vErgaColInfo,
-                    stringsAsFactors = TRUE,
-                    rowsPerRead = RowsPerRead,
-                    overwrite = TRUE
-)
-rxGetVarInfo(Erga_DS)
-rxSummary(~., data = Erga_DS)$sDataFrame
-
-file.remove(paste(strXDF, "Erga_DS.xdf", sep = ""))
-remove(Erga_DS)
-
 #########################
 #### SQL Table: vErga ###
 #########################
@@ -78,7 +59,7 @@ vErga_DS <- rxImport(inData = RxOdbcData(sqlQuery = "SELECT * FROM v4Erga", conn
                      # colClasses = vErgaColClasses,
                      # colInfo = vErgaColInfo
 # )
-rxGetInfo(vErga_DS)
+rxGetInfo(vErga_DS, getVarInfo = TRUE)
 rxSummary(~., data = vErga_DS)$sDataFrame
 
 

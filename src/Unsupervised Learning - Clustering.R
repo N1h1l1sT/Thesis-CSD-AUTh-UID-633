@@ -22,23 +22,26 @@ rxLinePlot(formula = GeoLocY ~ GeoLocX,
 #Eliminating invalid entries
 ClusteringSQLQuery <- "SELECT * FROM [YLIKA_KOSTOL].[dbo].[v4Erga] WHERE (GeoLocX >= 18 AND GeolocX <= 29 AND GeoLocY >= 34 AND GeoLocY <= 42) AND (GeoLocX <> -1 and GeoLocY <> -1)"
 Clustering_DS <- rxImport(inData = RxOdbcData(sqlQuery = ClusteringSQLQuery, connectionString = sqlConnString, rowsPerRead = RowsPerRead),
-                         outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
+                         outFile = paste(strXDF, "tmp.xdf", sep = ""),
                          colClasses = vErgaColClasses,
                          colInfo = vErgaColInfo,
                          stringsAsFactors = TRUE,
-                         varsToDrop = c("Onoma_Polis"),
                          overwrite = TRUE
 )
-remove(ClusteringSQLQuery)
+rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
+           outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
+           varsToDrop = c("Onoma_Polis"),
+           overwrite = TRUE
+)
+Clustering_DS <- RxXdfData(paste(strXDF, "Clustering_DS.xdf", sep = ""))
 file.remove(paste(strXDF, "vErga_DS.xdf", sep = ""))
+file.remove(paste(strXDF, "tmp.xdf", sep = ""))
 remove(vErga_DS)
-# This creates it in-memory and is not used
-# Clustering_DS <- rxImport(inData = paste(strXDF, "Clustering_DS.xdf", sep = ""),
-#                      colClasses = vErgaColClasses,
-#                      colInfo = vErgaColInfo)
-# rxSummary(~., data = Clustering_DS)$sDataFrame
 remove(vErgaColClasses)
 remove(vErgaColInfo)
+remove(ClusteringSQLQuery)
+
+rxSummary(~., data = Clustering_DS)$sDataFrame
 
 #Visualising the invalid-entries-free Locations of the Clustering Dataset
 rxLinePlot(GeoLocY ~ GeoLocX, Clustering_DS, type = "p")

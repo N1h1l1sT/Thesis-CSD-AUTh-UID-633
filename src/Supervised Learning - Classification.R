@@ -185,6 +185,7 @@ Training_DS <- RxXdfData(file = paste(strXDF, "Training_DS.xdf", sep = ""))
 
 #forming the test set
 ActualTestPercentage <- length(subset(tmp$SelectionRatio, tmp$SelectionRatio > 8)) / nrow(tmp) * 100
+ActualTestPercentage
 remove(tmp) #It is of no use after this, so removing it.
 rxDataStep(inData = paste(strXDF, "Classification_DS.xdf", sep = ""),
            outFile = paste(strXDF, "Test_DS.xdf", sep = ""),
@@ -195,6 +196,9 @@ rxDataStep(inData = paste(strXDF, "Classification_DS.xdf", sep = ""),
            overwrite = TRUE
 )
 Test_DS <- RxXdfData(file = paste(strXDF, "Test_DS.xdf", sep = ""))
+
+remove(ActualTestPercentage)
+remove(ActualTrainingPercentage)
 
 ####################################################################
 ### 1) Creating a Classification Model using Logistic Regression ###
@@ -236,7 +240,7 @@ rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
 )
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 5)
-# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 
 ## Creating and Viewing Statistics & Graphs ##
@@ -289,7 +293,7 @@ system.time(
                       )
 )
 TreeModel #The Tree model
-write.csv(TreeModel$cptable, "TreeModel cptable.csv")
+#write.csv(TreeModel$cptable, "TreeModel cptable.csv")
 printcp(rxAddInheritance(TreeModel)) #Table of optimal prunings based on complexity
 plotcp(rxAddInheritance(TreeModel))
 
@@ -378,6 +382,7 @@ plot(createTreeView(TreeModel))
 #text(rxAddInheritance(TreeModel))
 
 remove(TreeModel)
+remove(TreeModelPruned)
 
 ############################################################
 ### 3) Creating a Classification Model using Naive Bayes ###

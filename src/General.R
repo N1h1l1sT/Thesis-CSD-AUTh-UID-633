@@ -3,7 +3,7 @@
 ########################
 
 # Installing required Libraries
-install.packages(c("rpart.plot", "rattle")) #Only needed the first time the program runs!
+# install.packages(c("rpart.plot", "rattle")) #Only needed the first time the program runs!
 
 #Loading required Libraries
 library(rpart) #No installation needed, is already installed
@@ -19,6 +19,25 @@ sqlConnString <- "driver={SQL Server};server=GIANNISM-PC;database=YLIKA_KOSTOL;t
 
 # dim(Classification_DS) - its dimensions
 #Check out the rxImport function for an efficient and flexible way to bring data stored in a variety of data formats (e.g., text, SQL Server, ODBC, SAS, SPSS, Teradata) into a data frame in memory or an .xdf file.
+
+###################
+## Original Data ##
+###################
+
+#!!A View is needed with greek letters, because 'ΕΡΓΑ' won't work with error: Error in odbcTableExists(channel, sqtable): ‘<U+0395><U+03A1>G<U+0391>’: table not found on channel
+Erga_DS <- rxImport(inData = RxOdbcData(sqlQuery = "SELECT * FROM ERGA", connectionString = sqlConnString, rowsPerRead = 5000),
+                    outFile = paste(strXDF, "Erga_DS.xdf", sep = ""),
+                    colClasses = vErgaColClasses,
+                    colInfo = vErgaColInfo,
+                    stringsAsFactors = TRUE,
+                    rowsPerRead = RowsPerRead,
+                    overwrite = TRUE
+)
+rxGetVarInfo(Erga_DS)
+rxSummary(~., data = Erga_DS)$sDataFrame
+
+file.remove(paste(strXDF, "Erga_DS.xdf", sep = ""))
+remove(Erga_DS)
 
 
 #############################
