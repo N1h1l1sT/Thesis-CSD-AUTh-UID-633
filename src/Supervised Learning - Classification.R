@@ -1,7 +1,6 @@
 #################
 ### Functions ###
 #################
-
 Spaces <- function(NumOfSpaces) {
   str <- ""
 
