@@ -15,6 +15,9 @@ rxLinePlot(formula = GeoLocY ~ GeoLocX,
 )
 #Many entries are outside Greece's rectangle
 
+file.remove(paste(strXDF, "vErga_DS.xdf", sep = ""))
+remove(vErga_DS)
+
 
 #################
 ## Iteration 1 ##
@@ -28,19 +31,31 @@ Clustering_DS <- rxImport(inData = RxOdbcData(sqlQuery = ClusteringSQLQuery, con
                          stringsAsFactors = TRUE,
                          overwrite = TRUE
 )
+rxSetVarInfo(varInfo = NewvErgaVarInfo,
+             data = paste(strXDF, "tmp.xdf", sep = "")
+)
 rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
-           outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
+           outFile = paste(strXDF, "tmp2.xdf", sep = ""),
            varsToDrop = c("Onoma_Polis"),
            overwrite = TRUE
 )
+rxFactors(inData = paste(strXDF, "tmp2.xdf", sep = ""),
+          outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
+          factorInfo = c("TimeSeriesDate"), 
+          sortLevels = TRUE,
+          overwrite = TRUE
+)
 Clustering_DS <- RxXdfData(paste(strXDF, "Clustering_DS.xdf", sep = ""))
-file.remove(paste(strXDF, "vErga_DS.xdf", sep = ""))
+
+
 file.remove(paste(strXDF, "tmp.xdf", sep = ""))
-remove(vErga_DS)
+file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
+remove(NewvErgaVarInfo)
 remove(vErgaColClasses)
 remove(vErgaColInfo)
 remove(ClusteringSQLQuery)
 
+rxGetInfo(Clustering_DS, getVarInfo = TRUE, numRows = 1)
 rxSummary(~., data = Clustering_DS)$sDataFrame
 
 #Visualising the invalid-entries-free Locations of the Clustering Dataset
@@ -53,7 +68,7 @@ unsupervisedLocationData1 <- rxDataStep(inData = Clustering_DS,
                                         varsToKeep = c("GeoLocX", "GeoLocY")
 )
 WithinGroupsSquaredError <- (nrow(unsupervisedLocationData1) - 1) * sum(apply(unsupervisedLocationData1, 2, var))
-for (i in 2:15) {
+for (i in 2:30) {
   WithinGroupsSquaredError[i] <- sum(rxKmeans(formula = formula(~ GeoLocX + GeoLocY),
                                               data = unsupervisedLocationData1, 
                                               numClusters = i, 
@@ -63,14 +78,26 @@ for (i in 2:15) {
 }
 
 remove(unsupervisedLocationData1)
-remove(i)
 
-plot(1:15,
+plot(1:30,
      WithinGroupsSquaredError,
      type = "b",
      xlab = "# of Clusters",
      ylab = "Within Groups Sum of Squares"
 )
+
+k <- 1
+for (i in 2:30) {
+  if (((WithinGroupsSquaredError[i-1] - WithinGroupsSquaredError[i]) / WithinGroupsSquaredError[i]) <= 0.1) {
+    break
+  }
+  else {
+    k <- i
+  }
+}
+k
+
+remove(i)
 remove(WithinGroupsSquaredError)
 
 #############
@@ -78,7 +105,7 @@ remove(WithinGroupsSquaredError)
 #############
 KMeansModel <- rxKmeans(formula = ~ GeoLocX + GeoLocY, 
                         data = paste(strXDF, "Clustering_DS.xdf", sep = ""), 
-                        numClusters = 5,
+                        numClusters = k,
                         outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
                         algorithm = "lloyd",
                         blocksPerRead = 1,
