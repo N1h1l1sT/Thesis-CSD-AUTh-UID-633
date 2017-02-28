@@ -1,3 +1,4 @@
+if (("RevoScaleR" %in% loadedNamespaces())) {
 ## Unsupervised Learning - Clustering ##
 
 ##################################
@@ -41,7 +42,7 @@ rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
 )
 rxFactors(inData = paste(strXDF, "tmp2.xdf", sep = ""),
           outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
-          factorInfo = c("TimeSeriesDate"), 
+          factorInfo = c("TimeSeriesDate"),
           sortLevels = TRUE,
           overwrite = TRUE
 )
@@ -55,7 +56,7 @@ remove(vErgaColClasses)
 remove(vErgaColInfo)
 remove(ClusteringSQLQuery)
 
-rxGetInfo(Clustering_DS, getVarInfo = TRUE, numRows = 1)
+rxGetInfo(Clustering_DS, getVarInfo = TRUE, numRows = 0)
 rxSummary(~., data = Clustering_DS)$sDataFrame
 
 #Visualising the invalid-entries-free Locations of the Clustering Dataset
@@ -70,8 +71,8 @@ unsupervisedLocationData1 <- rxDataStep(inData = Clustering_DS,
 WithinGroupsSquaredError <- (nrow(unsupervisedLocationData1) - 1) * sum(apply(unsupervisedLocationData1, 2, var))
 for (i in 2:30) {
   WithinGroupsSquaredError[i] <- sum(rxKmeans(formula = formula(~ GeoLocX + GeoLocY),
-                                              data = unsupervisedLocationData1, 
-                                              numClusters = i, 
+                                              data = unsupervisedLocationData1,
+                                              numClusters = i,
                                               algorithm = "lloyd"
                                               )$withinss
                                  )
@@ -103,8 +104,8 @@ remove(WithinGroupsSquaredError)
 #############
 ## K-Means ##
 #############
-KMeansModel <- rxKmeans(formula = ~ GeoLocX + GeoLocY, 
-                        data = paste(strXDF, "Clustering_DS.xdf", sep = ""), 
+KMeansModel <- rxKmeans(formula = ~ GeoLocX + GeoLocY,
+                        data = paste(strXDF, "Clustering_DS.xdf", sep = ""),
                         numClusters = k,
                         outFile = paste(strXDF, "Clustering_DS.xdf", sep = ""),
                         algorithm = "lloyd",
@@ -121,3 +122,8 @@ rxLinePlot(GeoLocY ~ GeoLocX,
            type = "p"
 )
 
+
+
+} else {
+  "RevoScaleR not found. Please use Microsoft R Server or equivalent."
+}

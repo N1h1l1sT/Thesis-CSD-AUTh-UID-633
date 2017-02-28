@@ -1,3 +1,4 @@
+if (("RevoScaleR" %in% loadedNamespaces())) {
 ###########################
 ### Supervised Learning ###
 ###########################
@@ -12,22 +13,17 @@ rxDataStep(inData = paste(strXDF, "Clustering_DS.xdf", sep = ""),
                              LabelFactorial = factor(Label, c(0,1))),
            overwrite=TRUE
 )
-
 file.remove(paste(strXDF, "Clustering_DS.xdf", sep = ""))
 remove(Clustering_DS)
-
 rxDataStep(inData = paste(strXDF, "preClassification1_DS.xdf", sep = ""),
            outFile = paste(strXDF, "preClassification2_DS.xdf", sep = ""),
            varsToDrop = c("GeoLocX", "GeoLocY"),
            overwrite = TRUE
 )
-
 file.remove(paste(strXDF, "preClassification1_DS.xdf", sep = ""))
-
 preClassification2_DS <- RxXdfData(file = paste(strXDF, "preClassification2_DS.xdf", sep = ""))
-
 #Turns out, that if one types the path to the xfd in the inData var, the transformation will not work, but the rest seems to work fine.
-#One needs to import the xdf trhough RxXdfData to a var and give that to the inData for the transformation to work.
+#One needs to import the xdf through RxXdfData to a var and give that to the inData for the transformation to work.
 #Keep it in mind because many an hour can go wasted otherwise. Talking from experience.
 ClassificationColInfo <- list("LabelFactorial" = list(type = "factor", levels = c("0", "1"), newLevels = c("Cancelled", "Approved")))
 Classification_DS <- rxImport(inData = preClassification2_DS,
@@ -35,14 +31,17 @@ Classification_DS <- rxImport(inData = preClassification2_DS,
                               colInfo = ClassificationColInfo,
                               overwrite = TRUE
 )
+Classification_DS <- RxXdfData(paste(strXDF, "Classification_DS", sep = ""))
 n_Classification <- rxGetInfo(data = Classification_DS)$numRows
 
 remove(ClassificationColInfo)
 file.remove(paste(strXDF, "preClassification2_DS.xdf", sep = ""))
 remove(preClassification2_DS)
-
 #Visualising the Class Imbalance
 rxHistogram(~LabelFactorial, data = Classification_DS)
+
+rxGetInfo(Classification_DS, getVarInfo = TRUE, numRows = 0)
+rxSummary(~., data = Classification_DS)$sDataFrame
 
 ##########################
 #Forming the Training set#
@@ -60,6 +59,9 @@ n_Train <- rxGetInfo(data = Training_DS)$numRows
 ActualTrainingPercentage <- n_Train / n_Classification * 100
 ActualTrainingPercentage
 
+rxGetInfo(Training_DS, getVarInfo = TRUE, numRows = 0)
+rxSummary(~., data = Training_DS)$sDataFrame
+
 ######################
 #forming the test set#
 ######################
@@ -75,9 +77,11 @@ Test_DS <- RxXdfData(file = paste(strXDF, "Test_DS.xdf", sep = ""))
 n_Test <- rxGetInfo(data = Test_DS)$numRows
 ActualTestPercentage <- n_Test / n_Classification * 100
 ActualTestPercentage
-
 remove(ActualTestPercentage)
 remove(ActualTrainingPercentage)
+
+rxGetInfo(Test_DS, getVarInfo = TRUE, numRows = 0)
+rxSummary(~., data = Test_DS)$sDataFrame
 
 ####################################################################
 ### 1) Creating a Classification Model using Logistic Regression ###
@@ -101,15 +105,15 @@ system.time(
                                      , covCoef = TRUE
                                      # ,maxIterations =
                                      # ,fweights = #If duplicate rows have been eliminated, creating a new variable of how many duplicate rows were, then this Variable/Column can be used as Frequency Weight
-                                     # ,pweights = #Probablity weights for the observations
-                                     
+                                     # ,pweights = #Probability weights for the observations
+
                                      ,reportProgress = rxGetOption("reportProgress")
                                      ,blocksPerRead = rxGetOption("blocksPerRead")
                                      # ,rowSelection =
                                      # ,variableSelection = #rxStepControl(method="stepwise", scope = ~ Age + Start + Number )); parameters that control aspects of stepwise regression; cube must be FALSE
   )
 )
-summary(LogisticRegressionModel)
+# summary(LogisticRegressionModel)
 #LogisticRegressionModel$coefficients     #[vector] Model's Coefficients
 #LogisticRegressionModel$covCoef          #[vector] variance-covariance matrix for the regression coefficient estimates
 #LogisticRegressionModel$condition.number #[value ] estimated reciprocal condition number of final weighted cross-product (X'WX) matrix
@@ -136,7 +140,7 @@ rxPredict(modelObject = LogisticRegressionModel,
           # ,intervalVarNames = c("LogRe_LowerConfInterv", "LogRe_UpperConfInterv")
           # ,computeResiduals = TRUE
           # ,residVarNames = "LogRe_Residual"
-          
+
           ,blocksPerRead = rxGetOption("blocksPerRead")
           ,reportProgress = rxGetOption("reportProgress")
           ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
@@ -148,7 +152,7 @@ rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
            overwrite = TRUE
 )
 
-#rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 3)
+# rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 3)
 rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 
@@ -156,7 +160,7 @@ rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(LogRe_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, paste(strXDF, "Training_DS.xdf", sep = ""))
+Statistics(tmp, 3, paste(strXDF, "Training_DS.xdf", sep = ""))
 remove(tmp)
 
 ## Graphs ##
@@ -165,15 +169,20 @@ rxRocCurve(actualVarName = "Label",
            data = paste(strXDF, "Test_DS.xdf", sep = "")
 )
 
+saveRDS(LogisticRegressionModel, "models/LogisticRegressionModel.rds")
 remove(LogisticRegressionModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "LogRe_PredictionReal", "LogRe_Prediction"))
+write.csv(tmp, file = paste(strXDF, "LogisticRegression_Results.csv", sep = ""), row.names = FALSE)
+remove(tmp)
+
 
 ###############################################################
 ### 2) Creating a Classification Model using Decision Trees ###
 ###############################################################
 
-
 ## Creating the Model ##
-#Decision trees are effective algorithms widely used for classification and regression. Building a decision tree generally requires that all continuous variables be sorted in order to decide where to split the data. This sorting step becomes time and memory prohibitive when dealing with large data. Various techniques have been proposed to overcome the sorting obstacle, which can be roughly classified into two groups: performing data pre-sorting or using approximate summary statistic of the data. While pre-sorting techniques follow standard decision tree algorithms more closely, they cannot accommodate very large data sets. These big data decision trees are normally parallelized in various ways to enable large scale learning: data parallelism partitions the data either horizontally or vertically so that different processors see different observations or variables and task parallelism builds different tree nodes on different processors.
+#Decision trees are effective algorithms widely used for classification and regression. Building a decision tree generally requires that all continuous variables be sorted in order to decide where to split the data. This sorting step becomes time and memory prohibitive when dealing with large data. Various techniques have been proposed to overcome the sorting obstacle, which can be roughly classified into two groups: performing data pre-sorting or using approximate summary statistic of the data. While pre-sorting techniques follow standard decision tree algorithms more closely, they cannot accommodate very large data sets. These big data decision trees are normally parallelised in various ways to enable large scale learning: data parallelism partitions the data either horizontally or vertically so that different processors see different observations or variables and task parallelism builds different tree nodes on different processors.
 #The rxDTree algorithm is an approximate decision tree algorithm with horizontal data parallelism, especially designed for handling very large data sets. It uses histograms as the approximate compact representation of the data and builds the decision tree in a breadth-first fashion. The algorithm can be executed in parallel settings such as a multicore machine or a distributed environment with a master-worker architecture. Each worker gets only a subset of the observations of the data, but has a view of the complete tree built so far. It builds a histogram from the observations it sees, which essentially compresses the data to a fixed amount of memory. This approximate description of the data is then sent to a master with constant low communication complexity independent of the size of the data set. The master integrates the information received from each of the workers and determines which terminal tree nodes to split and how. Since the histogram is built in parallel, it can be quickly constructed even for extremely large data sets.
 #The total number of passes through the data is equal to a base of maxDepth + 3, plus xVal times (maxDepth + 2), where xVal is the number of folds for cross-validation and maxDepth is the maximum tree depth.
 #Scaling decision trees to very large data sets is possible with rxDTree but should be done with caution—the wrong choice of model parameters can easily lead to models that take hours or longer to estimate, even in a distributed computing environment. For example, in the Getting Started Guide, we estimated linear models using the big airline data and used the variable Origin as a predictor in several models. The Origin variable is a factor variable with 373 levels with no obvious ordering. Incorporating this variable into an rxDTree model that is performing more than two level classification can easily consume hours of computation time. To prevent such unintended consequences, rxDTree has a parameter maxUnorderedLevels which defaults to 32; in the case of Origin, this parameter would flag an error. However, a factor variable of “Region” which groups the airports of Origin by location may well be a useful proxy, and can be constructed to have only a limited number of levels. Numeric and ordered factor predictors are much more easily incorporated into the model.
@@ -184,7 +193,7 @@ system.time(
   #--maxDepth
   #--method [anova/class]
   #//To be left as is on this experiment (though tweakable if needed)\\#
-  #-- xval: Cross Validation Folds for Prunning, 10 is great (&very time consuming)
+  #--xval: Cross Validation Folds for Pruning, 10 is great (&very time consuming)
   #--cp: 0 is the best (&most time consuming)
   TreeModel <- rxDTree(LabelFactorial ~ TimeSeriesDate + GrafioEktelesisErgou + Katigoria + Xaraktirismos_Ergou + .rxCluster
                        + Skopos_Ergou + MelClientDelay + MelDEHDelay + MelOthersDelay + Sinergio_Meletis
@@ -209,25 +218,25 @@ system.time(
                        #,minSplit = #determines how many observations must be in a node before a split is attempted
                        #,minBucket =  #determines how many observations must remain in a terminal node.
                        #,fweights = #If duplicate rows have been eliminated, creating a new variable of how many duplicate rows were, then this Variable/Column can be used as Frequency Weight
-                       #,pweights = #Probablity weights for the observations
+                       #,pweights = #Probability weights for the observations
                        #,cost = c("") #a vector of non-negative costs, containing one element for each variable in the model. Defaults to one for all variables. When deciding which split	to choose, the improvement on splitting on a variable is divided by its cost
                        #,parms = list(loss = c(0, 3, 1, 0))
-  
+
                        ,blocksPerRead = rxGetOption("blocksPerRead")
                        ,reportProgress = rxGetOption("reportProgress")
                        ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
                        # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-TreeModel #The Tree model
-TreeModel$variable.importance   #[vector] A numerical value representing how important the variable has been to the model
+# TreeModel #The Tree model
+# TreeModel$variable.importance   #[vector] A numerical value representing how important the variable has been to the model
 # TreeModel$frame                 #[vector] var      n     wt          dev       yval   complexity ncompete nsurrogate
 
 # write.csv(TreeModel$cptable, "TreeModel cptable.csv")
 printcp(rxAddInheritance(TreeModel)) #Table of optimal prunings based on complexity
 plotcp(rxAddInheritance(TreeModel))
 
-#Based on where the decreate rate of Cross Validation Error (xerror) approaches a line,
+#Based on where the decrease rate of Cross Validation Error (xerror) approaches a line,
 #or better, for models fit with 2-fold or greater cross-validation, where cross-validation standard error approaches the line in the plot
 #TreeModelPruned <- prune(TreeModel, cp=2.2416e-04)
 
@@ -243,7 +252,7 @@ rxPredict(modelObject = TreeModel,
           # ,intervalVarNames = c("LogRe_LowerConfInterv", "LogRe_UpperConfInterv")
           # ,computeResiduals = TRUE
           # ,residVarNames = "LogRe_Residual"
-          
+
           ,blocksPerRead = rxGetOption("blocksPerRead")
           ,reportProgress = rxGetOption("reportProgress")
           ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
@@ -288,16 +297,15 @@ rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
 #\\ For method = Anova //#
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 5)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 
 ## Creating and Viewing Statistics & Graphs ##
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(Tree_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, paste(strXDF, "Test_DS.xdf", sep = ""))
+Statistics(tmp, 3, paste(strXDF, "Test_DS.xdf", sep = ""))
 remove(tmp)
-
 ## Graphs ##
 rxRocCurve(actualVarName = "Label",
            predVarName = "Tree_PredictionReal",
@@ -319,7 +327,13 @@ plot(createTreeView(TreeModel))
 #plot(rxAddInheritance(TreeModel))
 #text(rxAddInheritance(TreeModel))
 
+saveRDS(TreeModel, "models/TreeModel.rds")
 remove(TreeModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "Tree_PredictionReal", "Tree_Prediction"))
+write.csv(tmp, file = paste(strXDF, "DecisionTrees_Results", sep = ""), row.names = FALSE)
+remove(tmp)
+
 
 ############################################################
 ### 3) Creating a Classification Model using Naive Bayes ###
@@ -342,36 +356,36 @@ system.time(
                                   + Kathisterisi_AitisisKataxorisis + Kathisterisi_Meletis + Kathisterisi_Anagelias + DayOfYearSine
                                   + DayOfYearCosine + DayOfYearCartesX + DayOfYearCartesY
                                   ,data = paste(strXDF, "Training_DS.xdf", sep = "")
-                                  ,smoothingFactor = 1 #If we try to use our classifier on the test data without specifying a smoothing factor in our call to rxNaiveBayes the function rxPredict produces no results since our test data only has data from 2009. In general, smoothing is used to avoid overfitting your model. It follows that to achieve the optimal classifier you may want to smooth the conditional probabilities even if every level of each variable is observed. perform Laplace smoothing. A positive smoothing factor to account for cases not present in the training data. It avoids modeling issues by preventing zero conditional probability estimates. Since the conditional probabilities are being multiplied in the model, adding a small number to 0 probabilities, precludes missing categories from wiping out the calculation.
+                                  ,smoothingFactor = 1 #If we try to use our classifier on the test data without specifying a smoothing factor in our call to rxNaiveBayes the function rxPredict produces no results since our test data only has data from 2009. In general, smoothing is used to avoid over-fitting your model. It follows that to achieve the optimal classifier you may want to smooth the conditional probabilities even if every level of each variable is observed. perform Laplace smoothing. A positive smoothing factor to account for cases not present in the training data. It avoids modelling issues by preventing zero conditional probability estimates. Since the conditional probabilities are being multiplied in the model, adding a small number to 0 probabilities, precludes missing categories from wiping out the calculation.
                                   #,fweights = #If duplicate rows have been eliminated, creating a new variable of how many duplicate rows were, then this Variable/Column can be used as Frequency Weight
-                                  #,pweights = #Probablity weights for the observations
-                                  
+                                  #,pweights = #Probability weights for the observations
+
                                   ,blocksPerRead = rxGetOption("blocksPerRead")
                                   ,reportProgress = rxGetOption("reportProgress")
                                   ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
                                   # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-NaiveBayesModel #The Naive Bayes model
+# NaiveBayesModel #The Naive Bayes model
 # NaiveBayesModel$apriori           #[valueC] Proportion of the Label for each of its categories | Cancelled 0.2289043 Approved 0.7710957
 
 ## Applying the Predictions ##
-NB_Pred <- rxPredict(modelObject = NaiveBayesModel,
-                     data = paste(strXDF, "Test_DS.xdf", sep = ""),
-                     outData = paste(strXDF, "Test_DS.xdf", sep = ""),
-                     overwrite = TRUE
-                     ,predVarNames = c("NBCancelledProbabil", "NB_PredictionReal")#, "tmpNB_Prediction")
-                     ,type = "prob" #To get probabilities instead of 0/1
-                     # ,computeStdErr = TRUE
-                     # ,stdErrorsVarNames = "LogRe_StdError"
-                     # ,interval = "confidence" #to control whether confidence or prediction (tolerance) intervals are computed at the specified level (confLevel). These are sometimes referred to as narrow and wide intervals, respectively
-                     # ,intervalVarNames = c("LogRe_LowerConfInterv", "LogRe_UpperConfInterv")
-                     # ,computeResiduals = TRUE
-                     # ,residVarNames = "LogRe_Residual"
-                     
-                     ,blocksPerRead = rxGetOption("blocksPerRead")
-                     ,reportProgress = rxGetOption("reportProgress")
-                     ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
+rxPredict(modelObject = NaiveBayesModel,
+          data = paste(strXDF, "Test_DS.xdf", sep = ""),
+          outData = paste(strXDF, "Test_DS.xdf", sep = ""),
+          overwrite = TRUE
+          ,predVarNames = c("NBCancelledProbabil", "NB_PredictionReal")
+          ,type = "prob" #To get probabilities instead of 0/1
+          # ,computeStdErr = TRUE
+          # ,stdErrorsVarNames = "LogRe_StdError"
+          # ,interval = "confidence" #to control whether confidence or prediction (tolerance) intervals are computed at the specified level (confLevel). These are sometimes referred to as narrow and wide intervals, respectively
+          # ,intervalVarNames = c("LogRe_LowerConfInterv", "LogRe_UpperConfInterv")
+          # ,computeResiduals = TRUE
+          # ,residVarNames = "LogRe_Residual"
+
+          ,blocksPerRead = rxGetOption("blocksPerRead")
+          ,reportProgress = rxGetOption("reportProgress")
+          ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
 )
 
 rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
@@ -387,14 +401,14 @@ rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
 file.remove(paste(strXDF, "tmp.xdf", sep = ""))
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 5)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame           #Naive Bayes has 35 missing values on its output
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame           #Naive Bayes has 35 missing values on its output
 
 ## Creating and Viewing Statistics & Graphs ##
 
 
 ## Statistics ##
 tmp <- rxCube(~ F(LabelFactorial):F(NB_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, paste(strXDF, "Test_DS.xdf", sep = ""))
+Statistics(tmp, 3, paste(strXDF, "Test_DS.xdf", sep = ""))
 remove(tmp)
 
 ## Graphs ##
@@ -404,7 +418,12 @@ rxRocCurve(actualVarName = "Label",
            title = "Naive Bayes ROC Curve"
 )
 
+saveRDS(NaiveBayesModel, "models/NaiveBayesModel.rds")
 remove(NaiveBayesModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "NB_PredictionReal", "NB_Prediction"))
+write.csv(tmp, file = paste(strXDF, "NaiveBayes_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
 
 ##############################################################
@@ -417,7 +436,7 @@ system.time(
   #--Dependent Variables
   #--cp
   #--nTree
-  #--mTry
+  #--mTry #sqrt(num of vars) for classification / (num of vars)/3 for regression
   #--maxDepth
   #--method [anova/class]
   #--replace
@@ -433,7 +452,7 @@ system.time(
                                #For large data sets (100000 or more observations), you may need to adjust the following parameters to obtain meaningful models:
                                #The default cp of 0 produces a very large number of splits; specifying cp = 1e-5 produces a more manageable set of splits in this model
                                ,cp = 0 #this is a complexity parameter and sets the bar for how much a split must reduce the complexity before being accepted. We have set the default to 0 and recommend using maxDepth and minBucket to control your tree sizes. If you want to specify a cp value, start with a conservative value, such as rpart’s 0.01; if you don’t see an adequate number of splits, decrease the cp by powers of 10 until you do. For our large airline data, we have found interesting models begin with a cp of about 1e-4.
-                               ,nTree = 100
+                               ,nTree = 1000
                                ,mTry = 3
                                ,maxDepth = 15 #this sets the maximum depth of any node of the tree. Computations grow rapidly more expensive as the depth increases, so we recommend a maxDepth of 10 to 15.
                                ,method = "anova"
@@ -450,17 +469,17 @@ system.time(
                                # ,maxSurrogate = 0 #this specifies the number of surrogate splits retained in the output. Again, by default rxDTree sets this to 0. Surrogate splits are used to assign an observation when the primary split variable is missing for that observation.
                                # ,surrogateStyle = #0 or 1, 0 penalises surrogates with many missing values
                                # ,fweights = #If duplicate rows have been eliminated, creating a new variable of how many duplicate rows were, then this Variable/Column can be used as Frequency Weight
-                               # ,pweights = #Probablity weights for the observations
+                               # ,pweights = #Probability weights for the observations
                                # ,parms = list(loss = c(0, 3, 1, 0))
-                               
+
                                ,blocksPerRead = rxGetOption("blocksPerRead")
                                ,reportProgress = rxGetOption("reportProgress")
                                ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
                                # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-RandForestModel #The Random Forest model
-RandForestModel$oob.err        #[vector] a data frame containing the out-of-bag error estimate. For classification forests, this includes the OOB error estimate, which represents the proportion of times the predicted class is not equal to the true class, and the cumulative number of out-of-bag observations for the forest. For regression forests, this includes the OOB error estimate, which here represents the sum of squared residuals of the out-of-bag observations divided by the number of out-of-bag observations, the number of out-of-bag observations, the out-of-bag variance, and the “pseudo-R-Squared”, which is 1 minus the quotient of the oob.err and oob.var.
+# RandForestModel #The Random Forest model
+# RandForestModel$oob.err        #[vector] a data frame containing the out-of-bag error estimate. For classification forests, this includes the OOB error estimate, which represents the proportion of times the predicted class is not equal to the true class, and the cumulative number of out-of-bag observations for the forest. For regression forests, this includes the OOB error estimate, which here represents the sum of squared residuals of the out-of-bag observations divided by the number of out-of-bag observations, the number of out-of-bag observations, the out-of-bag variance, and the “pseudo-R-Squared”, which is 1 minus the quotient of the oob.err and oob.var.
 
 # Applying the Predictions ##
 rxPredict(modelObject = RandForestModel,
@@ -509,14 +528,14 @@ rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
 #\\ For method = Anova //#
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 5)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 
 ## Creating and Viewing Statistics & Graphs ##
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(RF_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -529,7 +548,12 @@ rxRocCurve(actualVarName = "Label",
            chanceGridLine = TRUE
 )
 
+saveRDS(RandForestModel, "models/RandForestModel.rds")
 remove(RandForestModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "RF_PredictionReal", "RF_Prediction"))
+write.csv(tmp, file = paste(strXDF, "RandomForest_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
 
 #############################################################################
@@ -557,9 +581,9 @@ system.time(
                          , data = paste(strXDF, "Training_DS.xdf", sep = "")
                          #For large data sets (100000 or more observations), you may need to adjust the following parameters to obtain meaningful models:
                          #The default cp of 0 produces a very large number of splits; specifying cp = 1e-5 produces a more manageable set of splits in this model
-                         
+
                          ,cp = 0 #this is a complexity parameter and sets the bar for how much a split must reduce the complexity before being accepted. We have set the default to 0 and recommend using maxDepth and minBucket to control your tree sizes. If you want to specify a cp value, start with a conservative value, such as rpart’s 0.01; if you don’t see an adequate number of splits, decrease the cp by powers of 10 until you do. For our large airline data, we have found interesting models begin with a cp of about 1e-4.
-                         ,nTree = 100
+                         ,nTree = 1000
                          ,mTry = 3
                          ,maxDepth = 15 #this sets the maximum depth of any node of the tree. Computations grow rapidly more expensive as the depth increases, so we recommend a maxDepth of 10 to 15.
                          ,lossFunction = "bernoulli"
@@ -577,16 +601,16 @@ system.time(
                          # ,maxSurrogate = 0 #this specifies the number of surrogate splits retained in the output. Again, by default rxDTree sets this to 0. Surrogate splits are used to assign an observation when the primary split variable is missing for that observation.
                          # ,surrogateStyle = #0 or 1, 0 penalises surrogates with many missing values
                          # ,fweights = #If duplicate rows have been eliminated, creating a new variable of how many duplicate rows were, then this Variable/Column can be used as Frequency Weight
-                         # ,pweights = #Probablity weights for the observations
-                         
+                         # ,pweights = #Probability weights for the observations
+
                          ,blocksPerRead = rxGetOption("blocksPerRead")
                          ,reportProgress = rxGetOption("reportProgress")
                          ,xdfCompressionLevel = rxGetOption("xdfCompressionLevel")
                          # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-StochGBModel #The Stochastic Gradient Boosted Decision Trees model
-StochGBModel$oob.err #a data frame containing the out-of-bag error estimate. For classification forests, this includes the OOB error estimate, which represents the proportion of times the predicted class is not equal to the true class, and the cumulative number of out-of-bag observations for the forest. For regression forests, this includes the OOB error estimate, which here represents the sum of squared residuals of the out-of-bag observations divided by the number of out-of-bag observations, the number of out-of-bag observations, the out-of-bag variance, and the “pseudo-R-Squared”, which is 1 minus the quotient of the oob.err and oob.var.
+# StochGBModel #The Stochastic Gradient Boosted Decision Trees model
+# StochGBModel$oob.err #a data frame containing the out-of-bag error estimate. For classification forests, this includes the OOB error estimate, which represents the proportion of times the predicted class is not equal to the true class, and the cumulative number of out-of-bag observations for the forest. For regression forests, this includes the OOB error estimate, which here represents the sum of squared residuals of the out-of-bag observations divided by the number of out-of-bag observations, the number of out-of-bag observations, the out-of-bag variance, and the “pseudo-R-Squared”, which is 1 minus the quotient of the oob.err and oob.var.
 
 # Applying the Predictions ##
 rxPredict(modelObject = StochGBModel,
@@ -601,45 +625,12 @@ rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
            overwrite = TRUE
 )
 
-#// For method = class \\#
-# rxPredict(modelObject = StochGBModel,
-#           data = paste(strXDF, "Test_DS.xdf", sep = ""),
-#           outData = paste(strXDF, "Test_DS.xdf", sep = ""),
-#           overwrite = TRUE
-#           # ,predVarNames = c("0_prob", "StochGB_PredictionReal")
-# )
-# rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
-#            outFile = paste(strXDF, "tmp.xdf", sep = ""),
-#            transforms = list(StochGB_Prediction = as.logical(round(StochGB_PredictionReal))),
-#            overwrite = TRUE
-# )
-# rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
-#            outFile = paste(strXDF, "Test_DS.xdf", sep = ""),
-#            varsToDrop = "0_prob",
-#            overwrite = TRUE
-# )
-#\\ For method = class //#
-
-#// For method = Anova \\#
-# rxPredict(modelObject = StochGBModel,
-#           data = paste(strXDF, "Test_DS.xdf", sep = ""),
-#           outData = paste(strXDF, "Test_DS.xdf", sep = ""),
-#           overwrite = TRUE,
-#           predVarNames = "StochGB_PredictionReal"
-# )
-# rxDataStep(inData = paste(strXDF, "Test_DS.xdf", sep = ""),
-#            outFile = paste(strXDF, "Test_DS.xdf", sep = ""),
-#            transforms = list(StochGB_Prediction = as.logical(round(StochGB_PredictionReal))),
-#            overwrite = TRUE
-# )
-#\\ For method = Anova //#
-
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 5)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(StochGB_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -652,13 +643,19 @@ rxRocCurve(actualVarName = "Label",
            chanceGridLine = TRUE
 )
 
+saveRDS(StochGBModel, "models/StochGBModel.rds")
 remove(StochGBModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "StochGB_PredictionReal", "StochGB_Prediction"))
+write.csv(tmp, file = paste(strXDF, "StochasticGradientBoosting_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
 
 ##################################################################################
 ### 6) Creating a Classification Model using Stochastic Dual Coordinate Ascent ###
 ##################################################################################
-#The rxFastLinear() algorithm is based on the Stochastic Dual Coordinate Ascent (SDCA) method, a state-of-the-art optimization technique for convex objective functions. The algorithm can be scaled for use on large out-of-memory data sets due to a semi-asynchronized implementation that supports multithreaded processing. Several choices of loss functions are also provided and elastic net regularization is supported. The SDCA method combines several of the best properties and capabilities of logistic regression and SVM algorithms.
+
+#The rxFastLinear() algorithm is based on the Stochastic Dual Coordinate Ascent (SDCA) method, a state-of-the-art optimisation technique for convex objective functions. The algorithm can be scaled for use on large out-of-memory data sets due to a semi-asynchronised implementation that supports multithreaded processing. Several choices of loss functions are also provided and elastic net regularisation is supported. The SDCA method combines several of the best properties and capabilities of logistic regression and SVM algorithms.
 ## Creating the Model ##
 system.time(
   #Tweakable:
@@ -668,6 +665,7 @@ system.time(
   #--l1Weight
   #--maxIterations
   #--shuffle
+  #--type [binary/regression]
   #//To be left as is on this experiment (though tweakable if needed)\\#
   SDCAModel <- rxFastLinear(Label ~ TimeSeriesDate + GrafioEktelesisErgou + Katigoria + Xaraktirismos_Ergou + .rxCluster
                             + Skopos_Ergou + MelClientDelay + MelDEHDelay + MelOthersDelay + Sinergio_Meletis
@@ -678,7 +676,7 @@ system.time(
                             + DayOfYearCosine + DayOfYearCartesX + DayOfYearCartesY
                             , data = paste(strXDF, "Training_DS.xdf", sep = "")
                             ,type = "binary"
-                            ,convergenceTolerance = 0.0001 #Specifies the tolerance threshold used as a convergence criterion. It must be between 0 and 1. The default value is 0.1. The algorithm is considered to have converged if the relative duality gap, which is the ratio between the duality gap and the primal loss, falls below the specified convergence tolerance.
+                            ,convergenceTolerance = 0.00001 #Specifies the tolerance threshold used as a convergence criterion. It must be between 0 and 1. The default value is 0.1. The algorithm is considered to have converged if the relative duality gap, which is the ratio between the duality gap and the primal loss, falls below the specified convergence tolerance.
                             ,normalize = "auto" #Specifies the type of automatic normalization used: [auto/no/yes/warn] "warn": if normalization is needed, a warning message is displayed, but normalization is not performed. Normalization rescales disparate data ranges to a standard scale. Feature scaling insures the distances between data points are proportional and enables various optimization methods such as gradient descent to converge much faster. If normalization is performed, a MaxMin normalizer is used. It normalizes values in an interval [a, b] where -1 <= a <= 0 and 0 <= b <= 1 and b - a = 1. This normalizer preserves sparsity by mapping zero to zero
                             # ,maxIterations = 25 #Specifies an upper bound on the number of training iterations. This parameter must be positive or NULL. If NULL is specified, the actual value is automatically computed based on data set. Each iteration requires a complete pass over the training data. Training terminates after the total number of iterations reaches the specified upper bound or when the loss function converges, whichever happens earlier.
                             # ,lossFunction = #Specifies the empirical loss function to optimize. For binary classification, the following choices are available: logLoss: The log-loss. This is the default. hingeLoss: The SVM hinge loss. Its parameter represents the margin size. smoothHingeLoss: The smoothed hinge loss. Its parameter represents the smoothing constant. For linear regression, squared loss squaredLoss is currently supported.
@@ -691,8 +689,8 @@ system.time(
                             # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-summary(SDCAModel) #The Stochastic Dual Coordinate Ascend Model
-SDCAModel$coefficients
+# summary(SDCAModel) #The Stochastic Dual Coordinate Ascend Model
+# SDCAModel$coefficients
 
 
 # Applying the Predictions ##
@@ -701,18 +699,32 @@ rxPredict(modelObject = SDCAModel,
           outData = paste(strXDF, "tmp.xdf", sep = ""),
           overwrite = TRUE
 )
-tmpVarInfo <- list(
-  PredictedLabel = list(newName = "SDCA_Prediction"),
-  Probability.1 = list(newName = "SDCA_PredictionReal")
-)
-rxSetVarInfo(varInfo = tmpVarInfo,
-             data = paste(strXDF, "tmp.xdf", sep = "")
-)
-rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
-           outFile = paste(strXDF, "tmp2.xdf", sep = ""),
-           varsToKeep = c("SDCA_PredictionReal", "SDCA_Prediction"),
-           overwrite = TRUE
-)
+if (type == "binary") {
+  tmpVarInfo <- list(
+    PredictedLabel = list(newName = "SDCA_Prediction"),
+    Probability.1 = list(newName = "SDCA_PredictionReal")
+  )
+  rxSetVarInfo(varInfo = tmpVarInfo,
+               data = paste(strXDF, "tmp.xdf", sep = "")
+  )
+  rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
+             outFile = paste(strXDF, "tmp2.xdf", sep = ""),
+             varsToKeep = c("SDCA_PredictionReal", "SDCA_Prediction"),
+             overwrite = TRUE
+  )
+} else {
+  tmpVarInfo <- list(
+    Score = list(newName = "SDCA_PredictionReal")
+  )
+  rxSetVarInfo(varInfo = tmpVarInfo,
+               data = paste(strXDF, "tmp.xdf", sep = "")
+  )
+  rxDataStep(inData = paste(strXDF, "tmp.xdf", sep = ""),
+             outFile = paste(strXDF, "tmp2.xdf", sep = ""),
+             transforms = list(SDCA_Prediction = ifelse(SDCA_PredictionReal >= 0.5, 1, 0)),
+             overwrite = TRUE
+  )
+}
 
 CurVarNamesTest <- rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame[[1]]
 if ("SDCA_PredictionReal" %in% (CurVarNamesTest)) {
@@ -747,11 +759,11 @@ file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
 
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 0)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(SDCA_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -761,12 +773,18 @@ rxRocCurve(actualVarName = "Label",
            chanceGridLine = TRUE
 )
 
+saveRDS(SDCAModel, "models/SDCAModel.rds")
 remove(SDCAModel)
 
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "SDCA_PredictionReal", "SDCA_Prediction"))
+write.csv(tmp, file = paste(strXDF, "StochasticDualCoordinateAscent_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
-######################################################################
-### 7) Creating a Classification Model using Boosted Decision Tree ###
-######################################################################
+
+#######################################################################
+### 7) Creating a Classification Model using Boosted Decision Trees ###
+#######################################################################
+
 #The rxFastTrees() algorithm is a high performing, state of the art scalable boosted decision tree that implements FastRank, an efficient implementation of the MART gradient boosting algorithm. MART learns an ensemble of regression trees, which is a decision tree with scalar values in its leaves. For binary classification, the output is converted to a probability by using some form of calibration.
 ## Creating the Model ##
 system.time(
@@ -797,13 +815,13 @@ system.time(
                             #,splitFraction = 1 #The fraction of randomly chosen features to use on each split. The default value is 1
                             #,firstUsePenalty = 0 #The feature first use penalty coefficient. This is a form of regularization that incurs a penalty for using a new feature when creating the tree. Increase this value to create trees that don't use many features. The default value is 0.
                             #,trainThreads = 8
-                            
+
                             ,blocksPerRead = rxGetOption("blocksPerRead")
                             ,reportProgress = rxGetOption("reportProgress")
                             # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-summary(BDTModel) #The Stochastic Dual Coordinate Ascend Model
+# summary(BDTModel) #The Boosted Decision Tree Model
 
 # Applying the Predictions ##
 rxPredict(modelObject = BDTModel,
@@ -857,11 +875,11 @@ file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
 
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 0)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(BDT_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -871,14 +889,20 @@ rxRocCurve(actualVarName = "Label",
            chanceGridLine = TRUE
 )
 
+saveRDS(BDTModel, "models/BDTModel.rds")
 remove(BDTModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "BDT_PredictionReal", "BDT_Prediction"))
+write.csv(tmp, file = paste(strXDF, "BoostedDecisionTrees_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
 
 
 ###########################################################################
 ### 8) Creating a Classification Model using Ensemble of Decision Trees ###
 ###########################################################################
-#The rxFastForest() algorithm is a random forest that provides a learning method for classification that constructs an ensemble of decision trees at training time, outputting the class that is the mode of the classes of the individual trees. Random decision forests can correct for the overfitting to training data sets to which decision trees are prone.
+
+#The rxFastForest() algorithm is a random forest that provides a learning method for classification that constructs an ensemble of decision trees at training time, outputting the class that is the mode of the classes of the individual trees. Random decision forests can correct for the over-fitting to training data sets to which decision trees are prone.
 ## Creating the Model ##
 system.time(
   #Tweakable:
@@ -896,25 +920,23 @@ system.time(
                             + DayOfYearCosine + DayOfYearCartesX + DayOfYearCartesY
                             , data = paste(strXDF, "Training_DS.xdf", sep = "")
                             ,type = "binary"
-                            ,numTrees = 5000 #Specifies the total number of decision trees to create in the ensemble.By creating more decision trees, you can potentially get better coverage, but the training time increases. The default value is 100
-                            ,numLeaves = 30 #The maximum number of leaves (terminal nodes) that can be created in any tree. Higher values potentially increase the size of the tree and get better precision, but risk overfitting and requiring longer training times. The default value is 20.
+                            ,numTrees = 1000 #Specifies the total number of decision trees to create in the ensemble.By creating more decision trees, you can potentially get better coverage, but the training time increases. The default value is 100
+                            ,numLeaves = 25 #The maximum number of leaves (terminal nodes) that can be created in any tree. Higher values potentially increase the size of the tree and get better precision, but risk over-fitting and requiring longer training times. The default value is 20.
                             ,numBins = round(min(1001, max(101, sqrt(n_Train)))) #this controls the maximum number of bins used for each variable. Managing the number of bins is important in controlling memory usage. The default is min(1001, max(101, sqrt(num of obs))). For small data sets with continuous predictors, you may find that you need to increase the maxNumBins to obtain models that resemble those from rpart.
                             ,gainConfLevel = 0 #Tree fitting gain confidence requirement (should be in the range [0,1)). The default value is 0.
-                           
-                            
                             #,minSplit = 10 #Minimum number of training instances required to form a leaf. That is, the minimal number of documents allowed in a leaf of a regression tree, out of the sub-sampled data. A 'split' means that features in each level of the tree (node) are randomly divided. The default value is 10. Only the number of instances is counted even if instances are weighted.
                             #,exampleFraction = 0.7 #The fraction of randomly chosen instances to use for each tree. The default value is 0.7
                             #,featureFraction = 0.7 #The fraction of randomly chosen features to use for each tree. The default value is 1
                             #,splitFraction = 0.7 #The fraction of randomly chosen features to use on each split. The default value is 1
                             #,firstUsePenalty = 0 #The feature first use penalty coefficient. This is a form of regularization that incurs a penalty for using a new feature when creating the tree. Increase this value to create trees that don't use many features. The default value is 0.
                             #,trainThreads = 8
-                            
+
                             ,blocksPerRead = rxGetOption("blocksPerRead")
                             ,reportProgress = rxGetOption("reportProgress")
                             # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-summary(EoDTModel) #The Stochastic Dual Coordinate Ascend Model
+# summary(EoDTModel) #The Stochastic Dual Coordinate Ascend Model
 
 # Applying the Predictions ##
 rxPredict(modelObject = EoDTModel,
@@ -968,11 +990,11 @@ file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
 
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 0)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(EoDT_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -982,21 +1004,23 @@ rxRocCurve(actualVarName = "Label",
            chanceGridLine = TRUE
 )
 
+saveRDS(EoDTModel, "models/EoDTModel.rds")
 remove(EoDTModel)
 
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "EoDT_PredictionReal", "EoDT_Prediction"))
+write.csv(tmp, file = paste(strXDF, "EnsembleofDecisionTrees_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
 
 ################################################################
 ### 9) Creating a Classification Model using Neural Networks ###
 ################################################################
+
 #The rxNeuralNet() algorithm supports a user-defined multilayer network topology with GPU acceleration. A neural network is a class of prediction models inspired by the human brain. It can be represented as a weighted directed graph. Each node in the graph is called a neuron. The neural network algorithm tries to learn the optimal weights on the edges based on the training data. Any class of statistical models can be considered a neural network if they use adaptive weights and can approximate non-linear functions of their inputs. Neural network regression is especially suited to problems where a more traditional regression model cannot fit a solution.
 ## Creating the Model ##
 system.time(
   #Tweakable:
   #--Variables
-  #--
-  #--
-  #--
   #//To be left as is on this experiment (though tweakable if needed)\\#
   #--normalize [auto/no/yes/warn]
   NNModel <- rxNeuralNet(Label ~ TimeSeriesDate + GrafioEktelesisErgou + Katigoria + Xaraktirismos_Ergou + .rxCluster
@@ -1008,24 +1032,22 @@ system.time(
                          + DayOfYearCosine + DayOfYearCartesX + DayOfYearCartesY
                          , data = paste(strXDF, "Training_DS.xdf", sep = "")
                          ,type = "binary"
-                         ,numHiddenNodes = 1000 #The default number of hidden nodes in the neural net. The default value is 100
-                         ,numIterations = 100 #The number of iterations on the full training set. The default value is 100
+                         ,numHiddenNodes = 500 #The default number of hidden nodes in the neural net. The default value is 100
+                         ,numIterations = 500 #The number of iterations on the full training set. The default value is 100
                          ,acceleration = "gpu" #[sse/gpu]
                          ,optimizer = sgd() #[sgd()/adaDeltaSgd()] A list specifying either the sgd or adaptive optimization algorithm. This list can be created using sgd or adaDeltaSgd. The default value is sgd.
-                         
                          # ,miniBatchSize = 1 #[1/256] Sets the mini-batch size. Recommended values are between 1 and 256. This parameter is only used when the acceleration is GPU. Setting this parameter to a higher value improves the speed of training, but it might negatively affect the accuracy. The default value is 1.
                          # ,netDefinition = #The Net# definition of the structure of the neural network. For more information about the Net# language, see https://docs.microsoft.com/en-us/azure/machine-learning/machine-learning-azure-ml-netsharp-reference-guide
                          # ,initWtsDiameter = 0.1 #Sets the initial weights diameter that specifies the range from which values are drawn for the initial learning weights. The weights are initialized randomly from within this range. The default value is 0.1.
                          # ,maxNorm = #Specifies an upper bound to constrain the norm of the incoming weight vector at each hidden unit. This can be very important in maxout neural networks as well as in cases where training produces unbounded weights
                          # ,normalize = "auto" #[auto/no/yes/warn] "warn": if normalization is needed, a warning message is displayed, but normalization is not performed. Normalization rescales disparate data ranges to a standard scale. Feature scaling insures the distances between data points are proportional and enables various optimization methods such as gradient descent to converge much faster. If normalization is performed, a MaxMin normalizer is used. It normalizes values in an interval [a, b] where -1 <= a <= 0 and 0 <= b <= 1 and b - a = 1. This normalizer preserves sparsity by mapping zero to zero
-                         
-                         
+
                          ,blocksPerRead = rxGetOption("blocksPerRead")
                          ,reportProgress = rxGetOption("reportProgress")
                          # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-summary(NNModel) #The Stochastic Dual Coordinate Ascend Model
+# summary(NNModel) #The Neural Networks Model
 
 # Applying the Predictions ##
 rxPredict(modelObject = NNModel,
@@ -1079,11 +1101,11 @@ file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
 
 
 # rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 0)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(NN_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -1094,12 +1116,18 @@ rxRocCurve(actualVarName = "Label",
            title = "Neural Networks"
 )
 
+saveRDS(NNModel, "models/NNModel.rds")
 remove(NNModel)
 
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "NN_PredictionReal", "NN_Prediction"))
+write.csv(tmp, file = paste(strXDF, "NeuralNetworks_Results", sep = ""), row.names = FALSE)
+remove(tmp)
 
-#####################################################################
-### 10) Creating a Classification Model using Logistic Regression ###
-#####################################################################
+
+##########################################################################
+### 10) Creating a Classification Model using Fast Logistic Regression ###
+##########################################################################
+
 #The rxLogisticRegression() algorithm is used to predict the value of a categorical dependent variable from its relationship to one or more independent variables assumed to have a logistic distribution. If the dependent variable has only two possible values (success/failure), then the logistic regression is binary. If the dependent variable has more than two possible values (blood type given diagnostic test results), then the logistic regression is multinomial.
 ## Creating the Model ##
 system.time(
@@ -1118,27 +1146,25 @@ system.time(
                                     + Kathisterisi_AitisisKataxorisis + Kathisterisi_Meletis + Kathisterisi_Anagelias + DayOfYearSine
                                     + DayOfYearCosine + DayOfYearCartesX + DayOfYearCartesY
                                     , data = paste(strXDF, "Training_DS.xdf", sep = "")
+
                                     ,type = "binary"
-                                    
                                     ,sgdInitTol = 0 #Set to a number greater than 0 to use Stochastic Gradient Descent (SGD) to find the initial parameters. A non-zero value set specifies the tolerance SGD uses to determine convergence. The default value is 0 specifying that SGD is not used.
-                                    
-                                    ,l2Weight = 1 #The L2 regularization weight. Its value must be greater than or equal to 0 and the default value is set to 1
-                                    ,l1Weight = 1 #The L1 regularization weight. Its value must be greater than or equal to 0 and the default value is set to 1
+                                    ,l2Weight = 1 #The L2 regularization weight. Its value must be greater than or equal to 0 and the default value is set to 1; is preferable for data that is not sparse. It pulls large weights towards zero
+                                    ,l1Weight = 1 #The L1 regularization weight. Its value must be greater than or equal to 0 and the default value is set to 1; can be applied to sparse models, when working with high-dimensional data. It pulls small weights associated features that are relatively unimportant towards 0
                                     ,optTol = 1e-07 #Threshold value for optimizer convergence. If the improvement between iterations is less than the threshold, the algorithm stops and returns the current model. Smaller values are slower, but more accurate. The default value is 1e-07
                                     ,memorySize = 20 #Memory size for L-BFGS, specifying the number of past positions and gradients to store for the computation of the next step. This optimization parameter limits the amount of memory that is used to compute the magnitude and direction of the next step. When you specify less memory, training is faster but less accurate. Must be greater than or equal to 1 and the default value is 20.
-                                    ,initWtsScale = 0 #Sets the initial weights diameter that specifies the range from which values are drawn for the initial weights. These weights are initialized randomly from within this range. For example, if the diameter is specified to be d, then the weights are uniformly distributed between -d/2 and d/2. The default value is 0, which specifies that allthe weights are initialized to 0.
+                                    ,initWtsScale = 0 #Sets the initial weights diameter that specifies the range from which values are drawn for the initial weights. These weights are initialized randomly from within this range. For example, if the diameter is specified to be d, then the weights are uniformly distributed between -d/2 and d/2. The default value is 0, which specifies that all the weights are initialized to 0.
                                     ,maxIterations = 100 #Sets the maximum number of iterations. After this number of steps, the algorithm stops even if it has not satisfied convergence criteria
                                     ,normalize = "auto" #[auto/no/yes/warn] "warn": if normalization is needed, a warning message is displayed, but normalization is not performed. Normalization rescales disparate data ranges to a standard scale. Feature scaling insures the distances between data points are proportional and enables various optimization methods such as gradient descent to converge much faster. If normalization is performed, a MaxMin normalizer is used. It normalizes values in an interval [a, b] where -1 <= a <= 0 and 0 <= b <= 1 and b - a = 1. This normalizer preserves sparsity by mapping zero to zero
                                     #trainThreads = NULL #The number of threads to use in training the model. This should be set to the number of cores on the machine. Note that L-BFGS multi-threading attempts to load dataset into memory. In case of out-of-memory issues, set trainThreads to 1 to turn off multi-threading. If NULL the number of threads to use is determined internally. The default value is NULL
                                     #denseOptimizer = #If TRUE, forces densification of the internal optimization vectors. If FALSE, enables the logistic regression optimizer use sparse or dense internal states as it finds appropriate. Setting denseOptimizer to TRUE requires the internal optimizer to use a dense internal state, which may help alleviate load on the garbage collector for some varieties of larger problems
-                                    
-                                    
+
                                     ,blocksPerRead = rxGetOption("blocksPerRead")
                                     ,reportProgress = rxGetOption("reportProgress")
                                     # ,rowSelection = #name of a logical variable in the data set (in quotes) or a logical expression using variables in the data set to specify row selection.
   )
 )
-summary(MLLRModel) #The Stochastic Dual Coordinate Ascend Model
+# summary(MLLRModel) #The Fast Logistic Regression Model
 
 # Applying the Predictions ##
 rxPredict(modelObject = MLLRModel,
@@ -1191,12 +1217,12 @@ file.remove(paste(strXDF, "tmp.xdf", sep = ""))
 file.remove(paste(strXDF, "tmp2.xdf", sep = ""))
 
 
-# rxGetInfo(paste(strXDF, "Test_DS.xdf", sep = ""), getVarInfo = TRUE, numRows = 0)
-rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
+# rxGetVarInfo(paste(strXDF, "Test_DS.xdf", sep = ""))
+# rxSummary(~., data = paste(strXDF, "Test_DS.xdf", sep = ""))$sDataFrame
 
 ## Statistics ##
 tmp <- rxCube(~ F(Label):F(MLLR_Prediction), data = paste(strXDF, "Test_DS.xdf", sep = ""))
-ShowStatistics(tmp, 3, Test_DS)
+Statistics(tmp, 3, Test_DS)
 remove(tmp)
 
 ## Graphs ##
@@ -1207,7 +1233,16 @@ rxRocCurve(actualVarName = "Label",
            title = "Logistic Regression"
 )
 
+saveRDS(MLLRModel, "models/MLLRModel.rds")
 remove(MLLRModel)
+
+tmp <- rxDataStep(inData = Test_DS, varsToKeep = c("ID_Erga", "MLLR_PredictionReal", "MLLR_Prediction"))
+write.csv(tmp, file = paste(strXDF, "FastLogisticRegression_Results", sep = ""), row.names = FALSE)
+remove(tmp)
+
+
+
+
 
 #Probably the most straightforward and intuitive metric for classifier performance is accuracy, Unfortunately, there are circumstances where simple accuracy does not work well.
 #For example, with a disease that only affects 1 in a million people a completely bogus screening test that always reports “negative” will be 99.9999% accurate. Unlike accuracy, ROC curves are insensitive to class imbalance; the bogus screening test would have an AUC of 0.5, which is like not having a test at all.
@@ -1237,7 +1272,7 @@ rocOut <- rxRoc(actualVarName = "Label",
 )
 #Show ROC Information
 rocOut
-rxAuc(rocOut)
+round(rxAuc(rocOut), 3)
 
 plot(rocOut,
      title = "ROC Curve for Label",
@@ -1245,9 +1280,13 @@ plot(rocOut,
 )
 
 remove(rocOut)
-remove(data)
-remove(k)
-remove(n_Classification)
-remove(n_Test)
-remove(n_Train)
-remove(NB_Pred)
+# remove(data)
+# remove(k)
+# remove(n_Classification)
+# remove(n_Test)
+# remove(n_Train)
+
+
+} else {
+  "RevoScaleR not found. Please use Microsoft R Server or equivalent."
+}

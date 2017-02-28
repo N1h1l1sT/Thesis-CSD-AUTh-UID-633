@@ -1,3 +1,4 @@
+if (("RevoScaleR" %in% loadedNamespaces())) {
 #Parallel computing is the process of breaking a given job into computationally independent components and running those independent components on separate threads, cores, or computers and then combining the results into a single returned result. Since its first release, RevoScaleR has performed parallel computing on any computer with multiple computing cores. Distributed computing is often used as a synonym for parallel computing, but in RevoScaleR we make the following distinction: distributed computing always refers to computations distributed over more than one computer, while parallel computing can occur on one computer or many.
 
 #Distributed computing capabilities are built into RevoScaleR. This means that you can develop complex analysis scripts on your local computer, create one or more compute contexts for use with distributed computing resources, and then seamlessly move between executing scripts on the local computer and in a distributed context. We call this flexibility Write Once, Deploy Anywhere, or WODA.
@@ -7,7 +8,13 @@
 ########################
 
 # Installing required Libraries
-# install.packages(c("rpart.plot", "rattle")) #Only needed the first time the program runs!
+# they only need be installed the first time the program runs
+if (!("rpart.plot" %in% installed.packages()[,1])) {
+	install.packages(c("rpart.plot"))
+}
+if (!("rattle" %in% installed.packages()[,1])) {
+	install.packages(c("rattle"))
+}
 
 #Loading required Libraries
 library(rpart) #No installation needed, is already installed
@@ -19,7 +26,7 @@ library(MicrosoftML)  #No installation needed, is already installed
 #Determines how many blocks/chunks will be. For a dataset with 20,000 rows, there will only be 1 chunk, whilst for one with 133,098 like ours, where will be Ceil(133,098/20,000)=7 chunks
 RowsPerRead = 20000
 strXDF = "H:/[XDF]/"
-#strDesktop = file.path(Sys.getenv("USERPROFILE"), "Desktop", fsep = "\\")
+#strDesktop = gsub("\\", "/", file.path(Sys.getenv("USERPROFILE"), "Desktop", fsep = "\\"), fixed = TRUE)
 sqlConnString <- "driver={SQL Server};server=GIANNISM-PC;database=YLIKA_KOSTOL;trusted_connection=true"
 
 # dim(Classification_DS) - its dimensions
@@ -31,34 +38,128 @@ sqlConnString <- "driver={SQL Server};server=GIANNISM-PC;database=YLIKA_KOSTOL;t
 Spaces <- function(NumOfSpaces) {
   str <- ""
   
-  if (NumOfSpaces > 0) {
-    for (i in 1:NumOfSpaces) {
-      str = paste(str, " ", sep = "")
+  if (!is.null(NumOfSpaces)) {
+    if (NumOfSpaces > 0) {
+      for (i in 1:NumOfSpaces) {
+        str = paste(str, " ", sep = "")
+      }
     }
   }
-  
+
   return(str)
+}
+
+insertRow <- function(existingDF, newrow, r) {
+  existingDF[seq(r+1,nrow(existingDF)+1),] <- existingDF[seq(r,nrow(existingDF)),]
+  existingDF[r,] <- newrow
+  existingDF
 }
 
 #####################################
 ### Creating the confusion matrix ###
 #####################################
 ConfMatrix <- function(ActAndPredValues, RoundAt) {
+  ActAndPredValues <- as.data.frame(ActAndPredValues)
+  irow <- 1
+
+  #Both 0 and 1 are needed as Factor Levels, but settings them manually with Levels(x) = y is changing the underlying values
+  #(i.e. 0 to 1 or 1 to 0); hence this is needed for it to work properly when there are no 0s or 1s in prediction or real values
+  if (nrow(ActAndPredValues) >= irow) {
+    FirstNum <- levels(ActAndPredValues[[1]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[1]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[1]]) <- cbind("1", "0")
+    }
+    FirstNum <- levels(ActAndPredValues[[2]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[2]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[2]]) <- cbind("1", "0")
+    }
+    if (!((ActAndPredValues[irow, 1] == 0) && (ActAndPredValues[irow, 2] == 0))) {
+      ActAndPredValues <- insertRow(ActAndPredValues, cbind(0, 0, 0), irow)
+    }
+  } else {
+    ActAndPredValues <- rbind(ActAndPredValues, c(0, 0, 0))
+  }
+  irow = irow + 1
+  
+  if (nrow(ActAndPredValues) >= irow) {
+    FirstNum <- levels(ActAndPredValues[[1]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[1]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[1]]) <- cbind("1", "0")
+    }
+    FirstNum <- levels(ActAndPredValues[[2]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[2]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[2]]) <- cbind("1", "0")
+    }
+    if (!((ActAndPredValues[irow, 1] == 1) && (ActAndPredValues[irow, 2] == 0))) {
+      ActAndPredValues <- insertRow(ActAndPredValues, cbind(1, 0, 0), irow)
+    }
+  } else {
+    ActAndPredValues <- rbind(ActAndPredValues, c(1, 0, 0))
+  }
+  irow = irow + 1
+  
+  if (nrow(ActAndPredValues) >= irow) {
+    FirstNum <- levels(ActAndPredValues[[1]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[1]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[1]]) <- cbind("1", "0")
+    }
+    FirstNum <- levels(ActAndPredValues[[2]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[2]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[2]]) <- cbind("1", "0")
+    }
+    if (!((ActAndPredValues[irow, 1] == 0) && (ActAndPredValues[irow, 2] == 1))) {
+      ActAndPredValues <- insertRow(ActAndPredValues, cbind(0, 1, 0), irow)
+    }
+  } else {
+    ActAndPredValues <- rbind(ActAndPredValues, c(0, 1, 0))
+  }
+  irow = irow + 1
+  
+  if (nrow(ActAndPredValues) >= irow) {
+    FirstNum <- levels(ActAndPredValues[[1]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[1]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[1]]) <- cbind("1", "0")
+    }
+    FirstNum <- levels(ActAndPredValues[[2]])[1]
+    if (FirstNum == "0") {
+      levels(ActAndPredValues[[2]]) <- cbind("0", "1")
+    } else {
+      levels(ActAndPredValues[[2]]) <- cbind("1", "0")
+    }
+    if (!((ActAndPredValues[irow, 1] == 1) && (ActAndPredValues[irow, 2] == 1))) {
+      ActAndPredValues <- insertRow(ActAndPredValues, cbind(1, 1, 0), irow)
+    }
+  } else {
+    ActAndPredValues <- rbind(ActAndPredValues, c(1, 1, 0))
+  }
+  
   TN <- ActAndPredValues$Counts[1]
   FN <- ActAndPredValues$Counts[2]
   FP <- ActAndPredValues$Counts[3]
   TP <- ActAndPredValues$Counts[4]
   
   MaxItemLength <- max(nchar(ActAndPredValues$Counts))
-  
+
   strConfMatrix <- paste(Spaces(nchar("Pred_Value  ")), "Actual_Value", Spaces(((2 * MaxItemLength) + nchar(paste("  "))) - nchar("Actual_Value")), sep = "")
   strConfMatrix <- rbind(strConfMatrix, paste("Pred_Value  " , Spaces(MaxItemLength - 1) , "0  " , Spaces(MaxItemLength - 1) , "1", sep = ""))
   strConfMatrix <- rbind(strConfMatrix, paste(Spaces(nchar("Pred_Value  ") - 3), "0  " , Spaces(MaxItemLength - nchar(TN)), TN, "  ",
                                               Spaces(MaxItemLength - nchar(FN)), FN, sep = ""))
   strConfMatrix <- rbind(strConfMatrix, paste(Spaces(nchar("Pred_Value  ") - 3), "1  " , Spaces(MaxItemLength - nchar(FP)), FP, "  ",
                                               Spaces(MaxItemLength - nchar(TP)), TP, sep = ""))
-  
-  
   ActAndPredValues <- as.data.frame(ActAndPredValues)
   ActAndPredValues$Result <- c("True Negative", "False Negative", "False Positive", "True Positive")
   ActAndPredValues$PCT <- round(ActAndPredValues$Counts / sum(ActAndPredValues$Counts), RoundAt) * 100
@@ -74,23 +175,23 @@ ConfMatrix <- function(ActAndPredValues, RoundAt) {
 ###############################
 ### Printing all Statistics ###
 ###############################
-#Applied Predictive Modeling By Max Kuhn and Kjell Johnson ISBN 978-1-4614-6849-3 http://www.springer.com/gp/book/9781461468486
+#Applied Predictive Modelling By Max Kuhn and Kjell Johnson ISBN 978-1-4614-6849-3 http://www.springer.com/gp/book/9781461468486
 #In relation to Bayesian statistics, the sensitivity and specificity are the conditional probabilities, the prevalence is the prior, and the positive/negative predicted values are the posterior probabilities.
-ShowStatistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
+Statistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
   TN <- ActAndPredValues$Counts[1]
   FN <- ActAndPredValues$Counts[2]
   FP <- ActAndPredValues$Counts[3]
   TP <- ActAndPredValues$Counts[4]
-  
+
   tmp <- rxSummary(~LabelFactorial, data = DataVarOrPath)$categorical
   MaxClass <- max(tmp[[1]][[2]])
   MinClass <- min(tmp[[1]][[2]])
-  
+
   P0 <- (TP + TN) / (TN + FN + FP + TP)
   Ma <- ((TP + FP) * (TP + FN)) / (TN + FN + FP + TP)
   Mb <- ((FN + TN) * (FP + TN)) / (TN + FN + FP + TP)
   Pe <- (Ma + Mb) / (TN + FN + FP + TP)
-  
+
   Stat <- list(
     ConfusionMatrix = ConfMatrix(ActAndPredValues, RoundAt),
     TotalPredictionPercentages = data.frame(Correctly = round(100 * (TN + TP) / sum(ActAndPredValues$Counts), RoundAt),
@@ -112,7 +213,7 @@ ShowStatistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
       YoudensJ = round((TP/(TP+FN)) + (TN/(TN+FP)) - 1, RoundAt)
     ),
     Rates = data.frame(
-      #The accuracy paradox for predictive analytics states that predictive models with a given level of accuracy may have greater predictive power than models with higher accuracy. It may be better to avoid the accuracy metric in favor of other metrics such as precision and recall
+      #The accuracy paradox for predictive analytics states that predictive models with a given level of accuracy may have greater predictive power than models with higher accuracy. It may be better to avoid the accuracy metric in favour of other metrics such as precision and recall
       #Overall, how often is the classifier correct?
       Accuracy = round((TN + TP) / (TN + FN + FP + TP), RoundAt),
       BalancedAccuracy = round(((TP / (TP + FN)) + (TN / (TN + FP))) / 2, RoundAt),
@@ -137,7 +238,7 @@ ShowStatistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
       NPV2 = round((TN / (TN + FP) * (1 - (FP + TP) / (TN + FN + FP + TP))) / ((1 - TP / (TP + FN)) * (FP + TP) / (TN + FN + FP + TP) + TN / (TN + FP) * (1 - (FP + TP) / (TN + FN + FP + TP))), RoundAt),
       #A way of conceptualizing the rate of type I errors in null hypothesis testing when conducting multiple comparisons
       FDR = round(FP / (FP + TP), RoundAt),
-      #The accuracy paradox for predictive analytics states that predictive models with a given level of accuracy may have greater predictive power than models with higher accuracy. It may be better to avoid the accuracy metric in favor of other metrics such as precision and recall
+      #The accuracy paradox for predictive analytics states that predictive models with a given level of accuracy may have greater predictive power than models with higher accuracy. It may be better to avoid the accuracy metric in favour of other metrics such as precision and recall
       #This is how often you would be wrong if you always predicted the majority class. This can be a useful baseline metric to compare your classifier against. However, the best classifier for a particular application will sometimes have a higher error rate than the null error rate, as demonstrated by the Accuracy Paradox.
       NullErrorRate = round(MinClass / MaxClass, RoundAt),
       #How often does the yes condition actually occur in our sample?
@@ -152,7 +253,7 @@ ShowStatistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
 ## Original Data ##
 ###################
 
-#!!A View is needed with greek letters, because 'ΕΡΓΑ' won't work with error: Error in odbcTableExists(channel, sqtable): ‘<U+0395><U+03A1>G<U+0391>’: table not found on channel
+#!!A View is needed with Greek letters, because 'ΕΡΓΑ' won't work with error: Error in odbcTableExists(channel, sqtable): ‘<U+0395><U+03A1>G<U+0391>’: table not found on channel
 Erga_DS <- rxImport(inData = RxOdbcData(sqlQuery = "SELECT * FROM ERGA", connectionString = sqlConnString, rowsPerRead = 5000),
                     outFile = paste(strXDF, "Erga_DS.xdf", sep = ""),
                     colClasses = vErgaColClasses,
@@ -254,3 +355,7 @@ rxSummary(~., data = paste(strXDF, "AIO_DS.xdf", sep = ""))$sDataFrame
 
 file.remove(paste(strXDF, "AIO_DS.xdf", sep = ""))
 remove(AIO_DS)
+
+} else {
+  "RevoScaleR not found. Please use Microsoft R Server or equivalent."
+}
