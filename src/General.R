@@ -201,23 +201,21 @@ Statistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
       #F-score, like recall and precision, only considers the so-called positive predictions, with recall being the probability of predicting just the positive class, precision being the probability of a positive prediction being correct, and F-score equating these probabilities under the effective assumption that the positive labels and the positive predictions should have the same distribution and prevalence
       F1 = round((2 * TP) / ((2 * TP) + FP + FN), RoundAt),
       #indicates the central tendency or typical value of a set of numbers
-      G1 = round(sqrt((TP / (TP + FP)) * (TP / (TP + FN))), RoundAt),
-      G2 = round(sqrt((((TP / (TP + FN) * (FP + TP) / (TN + FN + FP + TP)) / (TP / (TP + FN) * (FP + TP) / (TN + FN + FP + TP)) + (1 - (TN / (TN + FP))) * (1 - ((FP + TP) / (TN + FN + FP + TP))))) * (TP / (TP + FN))), RoundAt),
+      G = round(sqrt((TP / (TP + FP)) * (TP / (TP + FN))), RoundAt),
       #Matthews correlation coefficient is a measure of the quality of binary classifications. The MCC is in essence a correlation coefficient between the observed and predicted binary classifications; it returns a value between −1 and +1. A coefficient of +1 represents a perfect prediction, 0 no better than random prediction and −1 indicates total disagreement between prediction and observation. is generally regarded as a balanced measure which can be used even if the classes are of very different sizes.
       PhiMCC = round((((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))), RoundAt),
       #A measure of how well the classifier performed as compared to how well it would have performed simply by chance. In other words, a model will have a high Kappa score if there is a big difference between the accuracy and the null error rate.
       CohensK = round((P0 - Pe) / (1 - Pe), RoundAt),
-      #Youden's J statistic (also called Youden's index). estimates the probability of an informed decision.
-      #Its value ranges from -1 to 1, and has a zero value when a diagnostic test gives the same proportion of positive results for groups with and without the disease, i.e the test is useless.
-      #Youden's index is often used in conjunction with Receiver Operating Characteristic (ROC) analysis.[2] The index is defined for all points of an ROC curve, and the maximum value of the index may be used as a criterion for selecting the optimum cut-off point when a diagnostic test gives a numeric rather than a dichotomous result.
-      YoudensJ = round((TP/(TP+FN)) + (TN/(TN+FP)) - 1, RoundAt)
+	  YoudensJ = round((TP/(TP+FN)) + (TN/(TN+FP)) - 1, RoundAt)
     ),
     Rates = data.frame(
       #The accuracy paradox for predictive analytics states that predictive models with a given level of accuracy may have greater predictive power than models with higher accuracy. It may be better to avoid the accuracy metric in favour of other metrics such as precision and recall
       #Overall, how often is the classifier correct?
       Accuracy = round((TN + TP) / (TN + FN + FP + TP), RoundAt),
+	  #An alternative accuracy measure that does not lead to an optimistic estimate when a biased classifier is tested on an imbalanced dataset.
       BalancedAccuracy = round(((TP / (TP + FN)) + (TN / (TN + FP))) / 2, RoundAt),
-      DetectionRate = round(TP / (TN + FN + FP + TP), RoundAt),
+      #basically at which rate does the classifier identify the True Positive cases
+	  DetectionRate = round(TP / (TN + FN + FP + TP), RoundAt),
       #Overall, how often is it wrong?
       MisclassRate = round((FP + FN) / (TN + FN + FP + TP), RoundAt),
       #When it's actually yes, how often does it predict yes?
@@ -228,7 +226,7 @@ Statistics <- function(ActAndPredValues, RoundAt, DataVarOrPath) {
       SpecificityTNR = round(TN / (TN + FP), RoundAt),
       #The proportion of positives which yield negative test outcomes with the test, i.e., the conditional probability of a negative test result given that the condition being looked for is present
       FNR = round(FN / (FN + TP), RoundAt),
-      #A description of random errors, a measure of statistical variability; when it predicts yes, how often is it correct?
+      #when it predicts yes, how often is it correct?; A description of random errors, a measure of statistical variability
       PrecisionPPV1 = round(TP / (TP + FP), RoundAt),
       #Very similar to precision, except that it takes prevalence into account. In the case where the classes are perfectly balanced (meaning the prevalence is 50%), the positive predictive value (PPV) is equivalent to precision
       PPV2 = round(((TP / (TP + FN) * (FP + TP) / (TN + FN + FP + TP)) / (TP / (TP + FN) * (FP + TP) / (TN + FN + FP + TP)) + (1 - (TN / (TN + FP))) * (1 - ((FP + TP) / (TN + FN + FP + TP)))), RoundAt),
