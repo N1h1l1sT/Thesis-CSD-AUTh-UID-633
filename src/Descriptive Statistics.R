@@ -1,5 +1,5 @@
 if (("RevoScaleR" %in% loadedNamespaces())) {
-  
+
 #How construction cost differs between projects that were cancelled and those who weren't
 rxSummary(formula = ~Kostos_Kataskevis:LabelFactorial, data = Classification_DS)
 
